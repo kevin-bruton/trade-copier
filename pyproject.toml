@@ -1,0 +1,29 @@
+[project]
+name = "trade-copier"
+version = "0.1.0"
+description = "Trade Copier — copies trades between MetaTrader instances via a Python TCP server"
+requires-python = ">=3.13"
+dependencies = [
+    "pyqt5>=5.15.0",
+    "pyyaml>=6.0.3",
+    "qdarkstyle>=3.2.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v"
+
+[project.scripts]
+trade-copier = "app.main:main"
+
+[tool.uv]
+# PyQt5-Qt5 5.15.2 is the last release with Windows wheels; pin it to avoid
+# resolution failures on Windows with newer platform-incompatible releases.
+override-dependencies = [
+    "pyqt5-qt5==5.15.2",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.0",
+]
