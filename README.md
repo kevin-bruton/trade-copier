@@ -6,10 +6,20 @@ A Python application that copies trades in real time between MetaTrader 4 and Me
 
 ## How It Works
 
-```
-MT4 EA  ──┐
-MT5 EA  ──┼──► Python TCP Server ──► Copier Logic ──► PyQt5 UI
-MT4 EA  ──┘         (select loop)       (config.yaml)
+```mermaid
+flowchart LR
+    MT4A["MT4 EA"]
+    MT5["MT5 EA"]
+    MT4B["MT4 EA"]
+    Server["Python TCP Server<br/>(select loop)"]
+    Copier["Copier Logic<br/>(config.yaml)"]
+    UI["PyQt5 UI"]
+
+    MT4A --> Server
+    MT5 --> Server
+    MT4B --> Server
+    Server --> Copier
+    Copier --> UI
 ```
 
 - The **Python server** is the hub — one process, any number of MT clients.
@@ -140,16 +150,21 @@ The UI will open. Click **▶ Start Server** in the toolbar to begin listening f
 
 ## The UI at a Glance
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ▶ Start  ⏹ Stop  💾 Save Config  ↺ Reload Config  ● Status │  ← Toolbar
-├──────────────────┬──────────────────┬───────────────────────┤
-│ Connected        │ Copy Rules       │ Active Copies         │
-│ Instances        │                  │                       │
-│                  │                  │                       │
-├──────────────────┴──────────────────┴───────────────────────┤
-│ Event Log                                                   │
-└─────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart TB
+    Toolbar["Toolbar: Start / Stop / Save Config / Reload Config / Status"]
+
+    subgraph MainPanels["Main panels"]
+        direction LR
+        Instances["Connected<br/>Instances"]
+        Rules["Copy Rules"]
+        Copies["Active Copies"]
+    end
+
+    Log["Event Log"]
+
+    Toolbar --> MainPanels
+    MainPanels --> Log
 ```
 
 | Panel | Purpose |
@@ -292,29 +307,35 @@ Do **not** use `uv add PyQt5` — it resolves a newer `pyqt5-qt5` wheel that has
 
 ## Project Structure
 
-```
-trade-copier/
-├── app/
-│   ├── main.py              # entry point
-│   ├── server.py            # TCP server (threaded select loop)
-│   ├── copier.py            # copy logic and message dispatch
-│   ├── config.py            # YAML config manager
-│   ├── models.py            # dataclasses (MTInstance, CopyRecord, …)
-│   └── ui/
-│       ├── main_window.py
-│       ├── instances_panel.py
-│       ├── copies_panel.py
-│       ├── rules_panel.py
-│       └── log_panel.py
-├── mql/
-│   ├── TradeCopierEA.mq4    # MT4 Expert Advisor
-│   ├── TradeCopierEA.mq5    # MT5 Expert Advisor
-│   ├── Sockets.mqh          # socket client header
-│   └── SimpleJson.mqh       # JSON serialisation header
-├── tests/                   # pytest test suite (121 tests)
-├── docs/
-│   ├── implementation-plan.md
-│   └── e2e-test-plan.md     # manual end-to-end test cases
-├── config.yaml              # auto-created on first run
-└── pyproject.toml
+```mermaid
+flowchart TB
+    Root["trade-copier/"]
+
+    Root --> App["app/"]
+    App --> MainPy["main.py<br/>entry point"]
+    App --> ServerPy["server.py<br/>TCP server (threaded select loop)"]
+    App --> CopierPy["copier.py<br/>copy logic and message dispatch"]
+    App --> ConfigPy["config.py<br/>YAML config manager"]
+    App --> ModelsPy["models.py<br/>dataclasses (MTInstance, CopyRecord, ...)"]
+    App --> Ui["ui/"]
+    Ui --> MainWindowPy["main_window.py"]
+    Ui --> InstancesPanelPy["instances_panel.py"]
+    Ui --> CopiesPanelPy["copies_panel.py"]
+    Ui --> RulesPanelPy["rules_panel.py"]
+    Ui --> LogPanelPy["log_panel.py"]
+
+    Root --> Mql["mql/"]
+    Mql --> Mq4["TradeCopierEA.mq4<br/>MT4 Expert Advisor"]
+    Mql --> Mq5["TradeCopierEA.mq5<br/>MT5 Expert Advisor"]
+    Mql --> Sockets["Sockets.mqh<br/>socket client header"]
+    Mql --> SimpleJson["SimpleJson.mqh<br/>JSON serialisation header"]
+
+    Root --> Tests["tests/<br/>pytest test suite (121 tests)"]
+
+    Root --> Docs["docs/"]
+    Docs --> ImplPlan["implementation-plan.md"]
+    Docs --> E2ePlan["e2e-test-plan.md<br/>manual end-to-end test cases"]
+
+    Root --> ConfigYaml["config.yaml<br/>auto-created on first run"]
+    Root --> Pyproject["pyproject.toml"]
 ```
