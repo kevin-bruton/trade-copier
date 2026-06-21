@@ -16,12 +16,20 @@ addopts = "-v"
 [project.scripts]
 trade-copier = "app.main:main"
 
+[build-system]
+requires = ["uv_build>=0.8.22,<0.9.0"]
+build-backend = "uv_build"
+
 [tool.uv]
 # PyQt5-Qt5 5.15.2 is the last release with Windows wheels; pin it to avoid
 # resolution failures on Windows with newer platform-incompatible releases.
 override-dependencies = [
     "pyqt5-qt5==5.15.2",
 ]
+
+[tool.uv.build-backend]
+module-name = "app"
+module-root = ""
 
 [dependency-groups]
 dev = [
