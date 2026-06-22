@@ -1,19 +1,18 @@
 //+------------------------------------------------------------------+
-//|                                              TradeCopierEA.mq5   |
+//|                                              TradeCopierEA.mq4   |
 //|                                     Copyright 2025, Kevin Bruton |
 //|                                                                   |
-//| MT5 client EA for the Trade Copier Python server.                 |
+//| MT4 client EA for the Trade Copier Python server.                 |
 //| Connects as a TCP socket client; reports trades and executes      |
 //| copy/close commands from the server.                              |
-//| OnTrade() provides near-zero detection latency for position       |
-//| changes; OnTimer() handles the connection loop and heartbeats.    |
 //+------------------------------------------------------------------+
 #property strict
 #include <Sockets.mqh>
 #include <SimpleJson.mqh>
+#include <stdlib.mqh>   // ErrorDescription()
 
 //--- Input parameters
-input string  ServerHost               = "localhost";  // Python server hostname
+input string  ServerHost               = "127.0.0.1";  // Python server host/IP
 input ushort  ServerPort               = 9000;         // Python server port
 input int     HeartbeatIntervalSec     = 30;           // Heartbeat interval (seconds)
 input int     AccountUpdateIntervalSec = 15;           // Account update interval (seconds)
@@ -21,21 +20,21 @@ input int     TimerIntervalMs          = 100;          // Poll interval (millise
 input int     Slippage                 = 3;            // Slippage in points
 
 //--- Global state
-ClientSocket* glbSocket         = NULL;
-bool          isConnected       = false;
-datetime      lastHeartbeat     = 0;
+ClientSocket* glbSocket        = NULL;
+bool          isConnected      = false;
+datetime      lastHeartbeat    = 0;
 datetime      lastAccountUpdate = 0;
 
 //--- Tracked open positions
 struct TrackedPosition {
    long     ticket;
    string   symbol;
-   int      direction;   // POSITION_TYPE_BUY=0 or POSITION_TYPE_SELL=1
+   int      direction;   // OP_BUY or OP_SELL
    double   lots;
    double   openPrice;
    double   sl;
    double   tp;
-   long     magic;
+   int      magic;
    string   comment;
    datetime openTime;
 };
@@ -67,8 +66,7 @@ void UpdateStatusLabel(bool connected) {
    string text;
    color  col;
    if (connected) {
-      text = "⬤ TradeCopier  CONNECTED   "
-           + IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN));
+      text = "⬤ TradeCopier  CONNECTED   " + IntegerToString(AccountNumber());
       col  = clrLimeGreen;
    } else {
       text = "⬤ TradeCopier  DISCONNECTED";
@@ -121,7 +119,7 @@ void RemoveTracked(int idx) {
 //| Append a new entry to trackedPositions[]                         |
 //+------------------------------------------------------------------+
 void AddTracked(long ticket, string symbol, int direction, double lots,
-                double openPrice, double sl, double tp, long magic,
+                double openPrice, double sl, double tp, int magic,
                 string comment, datetime openTime) {
    ArrayResize(trackedPositions, trackedCount + 1);
    trackedPositions[trackedCount].ticket    = ticket;
@@ -138,28 +136,28 @@ void AddTracked(long ticket, string symbol, int direction, double lots,
 }
 
 //+------------------------------------------------------------------+
-//| Populate trackedPositions from current open positions on attach. |
+//| Populate trackedPositions from current open orders on attach.    |
 //| Called once from OnInit — does NOT send TRADE_OPENED messages.   |
 //+------------------------------------------------------------------+
 void InitTrackedPositions() {
    trackedCount = 0;
    ArrayResize(trackedPositions, 0);
 
-   for (int i = 0; i < PositionsTotal(); i++) {
-      ulong ticket = PositionGetTicket(i);
-      if (ticket == 0) continue;
+   for (int i = 0; i < OrdersTotal(); i++) {
+      if (!OrderSelect(i, SELECT_BY_POS)) continue;
+      if (OrderType() >= 2) continue;   // market orders only (OP_BUY=0, OP_SELL=1)
 
       AddTracked(
-         (long)ticket,
-         PositionGetString(POSITION_SYMBOL),
-         (int)PositionGetInteger(POSITION_TYPE),
-         PositionGetDouble(POSITION_VOLUME),
-         PositionGetDouble(POSITION_PRICE_OPEN),
-         PositionGetDouble(POSITION_SL),
-         PositionGetDouble(POSITION_TP),
-         PositionGetInteger(POSITION_MAGIC),
-         PositionGetString(POSITION_COMMENT),
-         (datetime)PositionGetInteger(POSITION_TIME)
+         OrderTicket(),
+         OrderSymbol(),
+         OrderType(),
+         OrderLots(),
+         OrderOpenPrice(),
+         OrderStopLoss(),
+         OrderTakeProfit(),
+         OrderMagicNumber(),
+         OrderComment(),
+         OrderOpenTime()
       );
    }
 }
@@ -168,25 +166,23 @@ void InitTrackedPositions() {
 //| Send REGISTER message                                            |
 //+------------------------------------------------------------------+
 void SendRegister() {
-   long tradeMode   = AccountInfoInteger(ACCOUNT_TRADE_MODE);
-   string accountType = (tradeMode == ACCOUNT_TRADE_MODE_REAL) ? "real" : "demo";
-
+   string accountType = IsDemo() ? "demo" : "real";
    string msg = CreateSimpleJson(
       "type",          "REGISTER",
-      "terminal_path", TerminalInfoString(TERMINAL_PATH),
-      "platform",      "MT5",
-      "broker",        AccountInfoString(ACCOUNT_COMPANY),
-      "account",       IntegerToString(AccountInfoInteger(ACCOUNT_LOGIN)),
+      "terminal_path", TerminalPath(),
+      "platform",      "MT4",
+      "broker",        AccountCompany(),
+      "account",       IntegerToString(AccountNumber()),
       "account_type",  accountType,
-      "currency",      AccountInfoString(ACCOUNT_CURRENCY),
-      "leverage",      IntegerToString(AccountInfoInteger(ACCOUNT_LEVERAGE)),
-      "balance",       DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE),      2),
-      "equity",        DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY),       2),
-      "margin",        DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN),       2),
-      "free_margin",   DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE),  2)
+      "currency",      AccountCurrency(),
+      "leverage",      IntegerToString(AccountLeverage()),
+      "balance",       DoubleToString(AccountBalance(),    2),
+      "equity",        DoubleToString(AccountEquity(),     2),
+      "margin",        DoubleToString(AccountMargin(),     2),
+      "free_margin",   DoubleToString(AccountFreeMargin(), 2)
    );
    SendMsg(msg);
-   Print("TradeCopierEA MT5: REGISTER sent for ", TerminalInfoString(TERMINAL_PATH));
+   Print("TradeCopierEA MT4: REGISTER sent for ", TerminalPath());
 }
 
 //+------------------------------------------------------------------+
@@ -196,29 +192,25 @@ string BuildPositionsString(int &outCount) {
    string result = "";
    outCount = 0;
 
-   for (int i = 0; i < PositionsTotal(); i++) {
-      ulong ticket = PositionGetTicket(i);
-      if (ticket == 0) continue;
+   for (int i = 0; i < OrdersTotal(); i++) {
+      if (!OrderSelect(i, SELECT_BY_POS)) continue;
+      if (OrderType() >= 2) continue;
+      if (StartsWith(OrderComment(), "COPY_")) continue;
 
-      string comment = PositionGetString(POSITION_COMMENT);
-      if (StartsWith(comment, "COPY_")) continue;
-
-      string symbol = PositionGetString(POSITION_SYMBOL);
-      int    digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-      int    posType = (int)PositionGetInteger(POSITION_TYPE);
-      string dir     = (posType == POSITION_TYPE_BUY) ? "buy" : "sell";
+      int    digits = (int)MarketInfo(OrderSymbol(), MODE_DIGITS);
+      string dir    = (OrderType() == OP_BUY) ? "buy" : "sell";
 
       if (outCount > 0) result += ";";
-      result += IntegerToString((long)ticket)                                              + "|"
-             +  symbol                                                                     + "|"
-             +  dir                                                                        + "|"
-             +  DoubleToString(PositionGetDouble(POSITION_VOLUME),      2)                + "|"
-             +  DoubleToString(PositionGetDouble(POSITION_PRICE_OPEN),  digits)           + "|"
-             +  DoubleToString(PositionGetDouble(POSITION_SL),          digits)           + "|"
-             +  DoubleToString(PositionGetDouble(POSITION_TP),          digits)           + "|"
-             +  IntegerToString(PositionGetInteger(POSITION_MAGIC))                       + "|"
-             +  FormatTime((datetime)PositionGetInteger(POSITION_TIME))                   + "|"
-             +  comment;
+      result += IntegerToString(OrderTicket())                                    + "|"
+             +  OrderSymbol()                                                     + "|"
+             +  dir                                                                + "|"
+             +  DoubleToString(OrderLots(),        2)                             + "|"
+             +  DoubleToString(OrderOpenPrice(),   digits)                        + "|"
+             +  DoubleToString(OrderStopLoss(),    digits)                        + "|"
+             +  DoubleToString(OrderTakeProfit(),  digits)                        + "|"
+             +  IntegerToString(OrderMagicNumber())                               + "|"
+             +  FormatTime(OrderOpenTime())                                        + "|"
+             +  OrderComment();
       outCount++;
    }
    return result;
@@ -236,7 +228,7 @@ void SendPositionsSnapshot() {
       "positions", positions
    );
    SendMsg(msg);
-   Print("TradeCopierEA MT5: POSITIONS_SNAPSHOT sent, count=", count);
+   Print("TradeCopierEA MT4: POSITIONS_SNAPSHOT sent, count=", count);
 }
 
 //+------------------------------------------------------------------+
@@ -251,14 +243,14 @@ void CheckPositionChanges() {
    double   curOpenPrices[];
    double   curSLs[];
    double   curTPs[];
-   long     curMagics[];
+   int      curMagics[];
    string   curComments[];
    datetime curOpenTimes[];
    int      curCount = 0;
 
-   for (int i = 0; i < PositionsTotal(); i++) {
-      ulong ticket = PositionGetTicket(i);
-      if (ticket == 0) continue;
+   for (int i = 0; i < OrdersTotal(); i++) {
+      if (!OrderSelect(i, SELECT_BY_POS)) continue;
+      if (OrderType() >= 2) continue;
 
       ArrayResize(curTickets,    curCount + 1);
       ArrayResize(curSymbols,    curCount + 1);
@@ -271,16 +263,16 @@ void CheckPositionChanges() {
       ArrayResize(curComments,   curCount + 1);
       ArrayResize(curOpenTimes,  curCount + 1);
 
-      curTickets[curCount]    = (long)ticket;
-      curSymbols[curCount]    = PositionGetString(POSITION_SYMBOL);
-      curDirections[curCount] = (int)PositionGetInteger(POSITION_TYPE);
-      curLots[curCount]       = PositionGetDouble(POSITION_VOLUME);
-      curOpenPrices[curCount] = PositionGetDouble(POSITION_PRICE_OPEN);
-      curSLs[curCount]        = PositionGetDouble(POSITION_SL);
-      curTPs[curCount]        = PositionGetDouble(POSITION_TP);
-      curMagics[curCount]     = PositionGetInteger(POSITION_MAGIC);
-      curComments[curCount]   = PositionGetString(POSITION_COMMENT);
-      curOpenTimes[curCount]  = (datetime)PositionGetInteger(POSITION_TIME);
+      curTickets[curCount]    = OrderTicket();
+      curSymbols[curCount]    = OrderSymbol();
+      curDirections[curCount] = OrderType();
+      curLots[curCount]       = OrderLots();
+      curOpenPrices[curCount] = OrderOpenPrice();
+      curSLs[curCount]        = OrderStopLoss();
+      curTPs[curCount]        = OrderTakeProfit();
+      curMagics[curCount]     = OrderMagicNumber();
+      curComments[curCount]   = OrderComment();
+      curOpenTimes[curCount]  = OrderOpenTime();
       curCount++;
    }
 
@@ -298,8 +290,8 @@ void CheckPositionChanges() {
       // COPY_ positions must NOT generate TRADE_OPENED (loop-prevention)
       if (StartsWith(curComments[i], "COPY_")) continue;
 
-      string dir    = (curDirections[i] == POSITION_TYPE_BUY) ? "buy" : "sell";
-      int    digits = (int)SymbolInfoInteger(curSymbols[i], SYMBOL_DIGITS);
+      string dir    = (curDirections[i] == OP_BUY) ? "buy" : "sell";
+      int    digits = (int)MarketInfo(curSymbols[i], MODE_DIGITS);
 
       string msg = CreateSimpleJson(
          "type",       "TRADE_OPENED",
@@ -315,10 +307,11 @@ void CheckPositionChanges() {
          "comment",    curComments[i]
       );
       SendMsg(msg);
-      Print("TradeCopierEA MT5: TRADE_OPENED ticket=", curTickets[i], " symbol=", curSymbols[i]);
+      Print("TradeCopierEA MT4: TRADE_OPENED ticket=", curTickets[i], " symbol=", curSymbols[i]);
    }
 
    // --- Detect closed positions (in tracked but gone from current) ---
+   // Capture initial count; positions added in the loop above won't be "missing"
    int initialTracked = trackedCount;
    for (int i = initialTracked - 1; i >= 0; i--) {
       bool stillOpen = false;
@@ -331,30 +324,22 @@ void CheckPositionChanges() {
       string symbol    = trackedPositions[i].symbol;
       int    direction = trackedPositions[i].direction;
       double lots      = trackedPositions[i].lots;
-      long   magic     = trackedPositions[i].magic;
+      int    magic     = trackedPositions[i].magic;
 
       double   closePrice = 0.0;
       double   profit     = 0.0;
       datetime closeTime  = TimeCurrent();
 
-      // Retrieve close details from deal history
-      if (HistorySelectByPosition((ulong)ticket)) {
-         int deals = HistoryDealsTotal();
-         for (int d = deals - 1; d >= 0; d--) {
-            ulong dealTicket = HistoryDealGetTicket(d);
-            if (HistoryDealGetInteger(dealTicket, DEAL_ENTRY) == DEAL_ENTRY_OUT) {
-               closePrice = HistoryDealGetDouble(dealTicket,  DEAL_PRICE);
-               profit     = HistoryDealGetDouble(dealTicket,  DEAL_PROFIT);
-               closeTime  = (datetime)HistoryDealGetInteger(dealTicket, DEAL_TIME);
-               break;
-            }
-         }
+      if (OrderSelect((int)ticket, SELECT_BY_TICKET)) {
+         closePrice = OrderClosePrice();
+         profit     = OrderProfit();
+         closeTime  = OrderCloseTime();
       }
 
       RemoveTracked(i);
 
-      string dir    = (direction == POSITION_TYPE_BUY) ? "buy" : "sell";
-      int    digits = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
+      string dir    = (direction == OP_BUY) ? "buy" : "sell";
+      int    digits = (int)MarketInfo(symbol, MODE_DIGITS);
 
       string msg = CreateSimpleJson(
          "type",        "TRADE_CLOSED",
@@ -368,7 +353,7 @@ void CheckPositionChanges() {
          "close_time",  FormatTime(closeTime)
       );
       SendMsg(msg);
-      Print("TradeCopierEA MT5: TRADE_CLOSED ticket=", ticket, " symbol=", symbol);
+      Print("TradeCopierEA MT4: TRADE_CLOSED ticket=", ticket, " symbol=", symbol);
    }
 }
 
@@ -381,10 +366,10 @@ void MaybeSendAccountUpdate() {
 
    string msg = CreateSimpleJson(
       "type",        "ACCOUNT_UPDATE",
-      "balance",     DoubleToString(AccountInfoDouble(ACCOUNT_BALANCE),     2),
-      "equity",      DoubleToString(AccountInfoDouble(ACCOUNT_EQUITY),      2),
-      "margin",      DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN),      2),
-      "free_margin", DoubleToString(AccountInfoDouble(ACCOUNT_MARGIN_FREE), 2)
+      "balance",     DoubleToString(AccountBalance(),    2),
+      "equity",      DoubleToString(AccountEquity(),     2),
+      "margin",      DoubleToString(AccountMargin(),     2),
+      "free_margin", DoubleToString(AccountFreeMargin(), 2)
    );
    SendMsg(msg);
 }
@@ -409,20 +394,18 @@ void MaybeSendHeartbeat() {
 void ExecuteCopyTrade(string copy_id, string symbol, string direction,
                       double lots, double sl, double tp, int magic) {
    // Ensure symbol is visible in Market Watch
-   if (!SymbolSelect(symbol, true)) {
-      Print("TradeCopierEA MT5: SymbolSelect failed for ", symbol);
-   }
+   SymbolSelect(symbol, true);
 
-   int    digits    = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-   ENUM_ORDER_TYPE orderType;
+   int    digits    = (int)MarketInfo(symbol, MODE_DIGITS);
+   int    orderType;
    double price;
 
    if (direction == "buy") {
-      orderType = ORDER_TYPE_BUY;
-      price     = SymbolInfoDouble(symbol, SYMBOL_ASK);
+      orderType = OP_BUY;
+      price     = MarketInfo(symbol, MODE_ASK);
    } else {
-      orderType = ORDER_TYPE_SELL;
-      price     = SymbolInfoDouble(symbol, SYMBOL_BID);
+      orderType = OP_SELL;
+      price     = MarketInfo(symbol, MODE_BID);
    }
 
    if (price <= 0) {
@@ -439,9 +422,9 @@ void ExecuteCopyTrade(string copy_id, string symbol, string direction,
    }
 
    // Clamp lots to broker limits and round down to step
-   double minLot  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MIN);
-   double maxLot  = SymbolInfoDouble(symbol, SYMBOL_VOLUME_MAX);
-   double lotStep = SymbolInfoDouble(symbol, SYMBOL_VOLUME_STEP);
+   double minLot  = MarketInfo(symbol, MODE_MINLOT);
+   double maxLot  = MarketInfo(symbol, MODE_MAXLOT);
+   double lotStep = MarketInfo(symbol, MODE_LOTSTEP);
    if (lots < minLot) lots = minLot;
    if (lots > maxLot) lots = maxLot;
    lots = NormalizeDouble(MathFloor(lots / lotStep) * lotStep, 2);
@@ -451,52 +434,44 @@ void ExecuteCopyTrade(string copy_id, string symbol, string direction,
    if (sl > 0) sl = NormalizeDouble(sl, digits);
    if (tp > 0) tp = NormalizeDouble(tp, digits);
 
-   // Comment: "COPY_" + full copy_id (no truncation needed in MT5)
-   string comment = "COPY_" + copy_id;
+   // Comment: "COPY_" + 26 hex chars = 31 chars (MT4 limit)
+   string comment = "COPY_" + StringSubstr(copy_id, 0, 26);
 
-   MqlTradeRequest request = {};
-   MqlTradeResult  result  = {};
+   int ticket = OrderSend(
+      symbol, orderType, lots, price, Slippage,
+      sl > 0 ? sl : 0,
+      tp > 0 ? tp : 0,
+      comment, magic, 0,
+      (orderType == OP_BUY) ? clrBlue : clrRed
+   );
 
-   request.action    = TRADE_ACTION_DEAL;
-   request.symbol    = symbol;
-   request.volume    = lots;
-   request.type      = orderType;
-   request.price     = price;
-   request.sl        = (sl > 0) ? sl : 0;
-   request.tp        = (tp > 0) ? tp : 0;
-   request.deviation = Slippage;
-   request.magic     = magic;
-   request.comment   = comment;
-
-   bool sent = OrderSend(request, result);
-
-   if (sent && result.retcode == TRADE_RETCODE_DONE) {
-      // result.deal is the position ticket for a newly opened position
-      ulong posTicket = result.deal;
-      string fillPrice = DoubleToString(result.price > 0 ? result.price : price, digits);
+   if (ticket > 0) {
+      string fillPrice = DoubleToString(price, digits);
+      if (OrderSelect(ticket, SELECT_BY_TICKET))
+         fillPrice = DoubleToString(OrderOpenPrice(), digits);
 
       string resultMsg = CreateSimpleJson(
          "type",       "COPY_RESULT",
          "copy_id",    copy_id,
          "success",    "true",
-         "ticket",     IntegerToString((long)posTicket),
+         "ticket",     IntegerToString(ticket),
          "open_price", fillPrice,
          "error",      ""
       );
       SendMsg(resultMsg);
 
       // Track immediately so CheckPositionChanges never fires TRADE_OPENED for it
-      AddTracked(
-         (long)posTicket, symbol,
-         (direction == "buy") ? POSITION_TYPE_BUY : POSITION_TYPE_SELL,
-         lots, result.price > 0 ? result.price : price,
-         sl > 0 ? sl : 0, tp > 0 ? tp : 0,
-         magic, comment, TimeCurrent()
-      );
-      Print("TradeCopierEA MT5: COPY_RESULT success ticket=", posTicket);
+      if (OrderSelect(ticket, SELECT_BY_TICKET)) {
+         AddTracked(
+            ticket, OrderSymbol(), OrderType(), OrderLots(),
+            OrderOpenPrice(), OrderStopLoss(), OrderTakeProfit(),
+            OrderMagicNumber(), OrderComment(), OrderOpenTime()
+         );
+      }
+      Print("TradeCopierEA MT4: COPY_RESULT success ticket=", ticket);
    } else {
-      string errStr = result.comment != "" ? result.comment
-                                           : IntegerToString(result.retcode);
+      int    error  = GetLastError();
+      string errStr = ErrorDescription(error);
       string resultMsg = CreateSimpleJson(
          "type",       "COPY_RESULT",
          "copy_id",    copy_id,
@@ -506,8 +481,7 @@ void ExecuteCopyTrade(string copy_id, string symbol, string direction,
          "error",      errStr
       );
       SendMsg(resultMsg);
-      Print("TradeCopierEA MT5: COPY_RESULT failed retcode=", result.retcode,
-            " ", result.comment);
+      Print("TradeCopierEA MT4: COPY_RESULT failed error=", error, " ", errStr);
    }
 }
 
@@ -515,49 +489,45 @@ void ExecuteCopyTrade(string copy_id, string symbol, string direction,
 //| Close a copied trade on behalf of the Python server              |
 //+------------------------------------------------------------------+
 void ExecuteCloseTrade(string copy_id, long ticket) {
-   if (!PositionSelectByTicket((ulong)ticket)) {
+   if (!OrderSelect((int)ticket, SELECT_BY_TICKET)) {
       string msg = CreateSimpleJson(
          "type",        "CLOSE_RESULT",
          "copy_id",     copy_id,
          "success",     "false",
          "close_price", "0",
-         "error",       "Ticket not found or already closed"
+         "error",       "Ticket not found"
       );
       SendMsg(msg);
       return;
    }
 
-   string symbol    = PositionGetString(POSITION_SYMBOL);
-   double lots      = PositionGetDouble(POSITION_VOLUME);
-   int    posType   = (int)PositionGetInteger(POSITION_TYPE);
-   int    digits    = (int)SymbolInfoInteger(symbol, SYMBOL_DIGITS);
-
-   ENUM_ORDER_TYPE closeType;
-   double          price;
-   if (posType == POSITION_TYPE_BUY) {
-      closeType = ORDER_TYPE_SELL;
-      price     = SymbolInfoDouble(symbol, SYMBOL_BID);
-   } else {
-      closeType = ORDER_TYPE_BUY;
-      price     = SymbolInfoDouble(symbol, SYMBOL_ASK);
+   if (OrderCloseTime() > 0) {
+      string msg = CreateSimpleJson(
+         "type",        "CLOSE_RESULT",
+         "copy_id",     copy_id,
+         "success",     "false",
+         "close_price", "0",
+         "error",       "Position already closed"
+      );
+      SendMsg(msg);
+      return;
    }
+
+   string symbol = OrderSymbol();
+   double lots   = OrderLots();
+   int    digits = (int)MarketInfo(symbol, MODE_DIGITS);
+
+   double price = (OrderType() == OP_BUY)
+                ? MarketInfo(symbol, MODE_BID)
+                : MarketInfo(symbol, MODE_ASK);
    price = NormalizeDouble(price, digits);
 
-   MqlTradeRequest request = {};
-   MqlTradeResult  result  = {};
+   bool closed = OrderClose((int)ticket, lots, price, Slippage, clrGray);
 
-   request.action    = TRADE_ACTION_DEAL;
-   request.symbol    = symbol;
-   request.volume    = lots;
-   request.type      = closeType;
-   request.price     = price;
-   request.deviation = Slippage;
-   request.position  = (ulong)ticket;
-
-   bool sent = OrderSend(request, result);
-
-   if (sent && result.retcode == TRADE_RETCODE_DONE) {
-      string closePrice = DoubleToString(result.price > 0 ? result.price : price, digits);
+   if (closed) {
+      string closePrice = DoubleToString(price, digits);
+      if (OrderSelect((int)ticket, SELECT_BY_TICKET))
+         closePrice = DoubleToString(OrderClosePrice(), digits);
 
       string msg = CreateSimpleJson(
          "type",        "CLOSE_RESULT",
@@ -570,10 +540,10 @@ void ExecuteCloseTrade(string copy_id, long ticket) {
 
       int idx = FindTracked(ticket);
       if (idx >= 0) RemoveTracked(idx);
-      Print("TradeCopierEA MT5: CLOSE_RESULT success ticket=", ticket);
+      Print("TradeCopierEA MT4: CLOSE_RESULT success ticket=", ticket);
    } else {
-      string errStr = result.comment != "" ? result.comment
-                                           : IntegerToString(result.retcode);
+      int    error  = GetLastError();
+      string errStr = ErrorDescription(error);
       string msg = CreateSimpleJson(
          "type",        "CLOSE_RESULT",
          "copy_id",     copy_id,
@@ -582,8 +552,7 @@ void ExecuteCloseTrade(string copy_id, long ticket) {
          "error",       errStr
       );
       SendMsg(msg);
-      Print("TradeCopierEA MT5: CLOSE_RESULT failed retcode=", result.retcode,
-            " ", result.comment);
+      Print("TradeCopierEA MT4: CLOSE_RESULT failed error=", error, " ", errStr);
    }
 }
 
@@ -593,7 +562,7 @@ void ExecuteCloseTrade(string copy_id, long ticket) {
 void RouteMessage(string rawMsg) {
    JsonKeyValue pairs[];
    if (!ParseSimpleJson(rawMsg, pairs)) {
-      Print("TradeCopierEA MT5: Failed to parse: ", rawMsg);
+      Print("TradeCopierEA MT4: Failed to parse: ", rawMsg);
       return;
    }
 
@@ -617,14 +586,14 @@ void RouteMessage(string rawMsg) {
       );
    }
    else if (type == "ACK_REGISTER") {
-      Print("TradeCopierEA MT5: ACK_REGISTER confirmed path=",
+      Print("TradeCopierEA MT4: ACK_REGISTER confirmed path=",
             GetJsonValue(pairs, "terminal_path"));
    }
    else if (type == "HEARTBEAT") {
       // No action needed
    }
    else {
-      Print("TradeCopierEA MT5: Unknown message type: ", type);
+      Print("TradeCopierEA MT4: Unknown message type: ", type);
    }
 }
 
@@ -648,11 +617,11 @@ void HandleConnection() {
       glbSocket = new ClientSocket(ServerHost, ServerPort);
 
       if (glbSocket.IsSocketConnected()) {
-         isConnected       = true;
-         lastHeartbeat     = TimeCurrent();
+         isConnected      = true;
+         lastHeartbeat    = TimeCurrent();
          lastAccountUpdate = TimeCurrent();
          UpdateStatusLabel(true);
-         Print("TradeCopierEA MT5: Connected to ", ServerHost, ":", ServerPort);
+         Print("TradeCopierEA MT4: Connected to ", ServerHost, ":", ServerPort);
          SendRegister();
          SendPositionsSnapshot();
       } else {
@@ -663,7 +632,7 @@ void HandleConnection() {
    else if (!glbSocket.IsSocketConnected()) {
       isConnected = false;
       UpdateStatusLabel(false);
-      Print("TradeCopierEA MT5: Connection lost, will retry");
+      Print("TradeCopierEA MT4: Connection lost, will retry");
       delete glbSocket;
       glbSocket = NULL;
    }
@@ -676,7 +645,7 @@ int OnInit() {
    EventSetMillisecondTimer(TimerIntervalMs);
    UpdateStatusLabel(false);
    InitTrackedPositions();
-   Print("TradeCopierEA MT5 initialised, tracking ", trackedCount, " existing positions");
+   Print("TradeCopierEA MT4 initialised, tracking ", trackedCount, " existing positions");
    return INIT_SUCCEEDED;
 }
 
@@ -693,12 +662,11 @@ void OnDeinit(const int reason) {
    }
 
    ObjectDelete(0, "TC_Status");
-   Print("TradeCopierEA MT5 deinitialised");
+   Print("TradeCopierEA MT4 deinitialised");
 }
 
 //+------------------------------------------------------------------+
 //| Timer — fires every TimerIntervalMs milliseconds                 |
-//| Handles connection loop, heartbeats, and periodic account updates|
 //+------------------------------------------------------------------+
 void OnTimer() {
    HandleConnection();
@@ -709,13 +677,4 @@ void OnTimer() {
    CheckPositionChanges();
    MaybeSendAccountUpdate();
    MaybeSendHeartbeat();
-}
-
-//+------------------------------------------------------------------+
-//| OnTrade — fires instantly on any position change (MT5 only)      |
-//| Provides near-zero latency; OnTimer() remains as safety-net.     |
-//+------------------------------------------------------------------+
-void OnTrade() {
-   if (!isConnected) return;
-   CheckPositionChanges();
 }

@@ -115,7 +115,7 @@ existing headers.
 #### 1.1 Input Parameters
 
 ```
-input string  ServerHost               = "localhost";
+input string  ServerHost               = "127.0.0.1";
 input ushort  ServerPort               = 9000;
 input int     HeartbeatIntervalSec     = 30;
 input int     AccountUpdateIntervalSec = 15;
@@ -389,7 +389,7 @@ Default `config.yaml`:
 
 ```yaml
 server:
-  host: "localhost"
+  host: "127.0.0.1"
   port: 9000
   heartbeat_interval: 30
   account_update_interval: 15
@@ -611,7 +611,7 @@ Toolbar: **[Clear]** button, **[Save log…]** button.
 #### 3.6 Server Status Indicator
 
 Right side of toolbar:
-- Green circle + "Running on localhost:9000" when server is active.
+- Green circle + "Running on 127.0.0.1:9000" when server is active.
 - Red circle + "Stopped" when not running.
 - Orange circle + "Starting…" during startup.
 
@@ -672,7 +672,7 @@ def main():
 
 ```yaml
 server:
-  host: "localhost"          # bind address for the TCP server
+  host: "127.0.0.1"          # bind address for the TCP server
   port: 9000                 # TCP port
   heartbeat_interval: 30     # seconds between heartbeats
   account_update_interval: 15  # seconds between ACCOUNT_UPDATE messages

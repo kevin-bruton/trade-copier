@@ -36,8 +36,8 @@ Usage examples:
    pairs[1].key = "message"; pairs[1].value = "completed";
    SendJsonMessage(glbClientSocket, pairs);
 
-Note: The JSON parser/builder handles simple structures only. It does 
-not support nested objects, arrays, or escaped characters in strings.
+Note: The JSON parser/builder handles simple structures only. It supports
+escaped characters in flat string values, but not nested objects or arrays.
 */
 #property copyright "Copyright 2025, Kevin Bruton"
 #property link      ""
@@ -53,6 +53,129 @@ struct JsonKeyValue {
    string key;
    string value;
 };
+
+// Convert a hex character code to its numeric value, or -1 if invalid
+int JsonHexValue(ushort ch) {
+   if (ch >= 48 && ch <= 57)  return (int)(ch - 48);  // 0-9
+   if (ch >= 65 && ch <= 70)  return (int)(ch - 55);  // A-F
+   if (ch >= 97 && ch <= 102) return (int)(ch - 87);  // a-f
+   return -1;
+}
+
+// Escape a string so it is valid inside a JSON string literal
+string JsonEscape(string str) {
+   string result = "";
+
+   for (int i = 0; i < StringLen(str); i++) {
+      ushort ch = StringGetCharacter(str, i);
+
+      if (ch == 34) {              // "
+         result += "\\\"";
+      } else if (ch == 92) {       // backslash
+         result += "\\\\";
+      } else if (ch == 8) {        // backspace
+         result += "\\b";
+      } else if (ch == 9) {        // tab
+         result += "\\t";
+      } else if (ch == 10) {       // line feed
+         result += "\\n";
+      } else if (ch == 12) {       // form feed
+         result += "\\f";
+      } else if (ch == 13) {       // carriage return
+         result += "\\r";
+      } else if (ch < 32) {
+         result += StringFormat("\\u%04X", (int)ch);
+      } else {
+         result += StringSubstr(str, i, 1);
+      }
+   }
+
+   return result;
+}
+
+// Decode JSON escapes from a flat string value
+string JsonUnescape(string str) {
+   string result = "";
+
+   for (int i = 0; i < StringLen(str); i++) {
+      ushort ch = StringGetCharacter(str, i);
+      if (ch != 92) { // backslash
+         result += StringSubstr(str, i, 1);
+         continue;
+      }
+
+      if (i + 1 >= StringLen(str)) {
+         result += "\\";
+         break;
+      }
+
+      i++;
+      ushort esc = StringGetCharacter(str, i);
+
+      if (esc == 34) {             // "
+         result += "\"";
+      } else if (esc == 92) {      // backslash
+         result += "\\";
+      } else if (esc == 47) {      // /
+         result += "/";
+      } else if (esc == 98) {      // b
+         result += ShortToString((ushort)8);
+      } else if (esc == 102) {     // f
+         result += ShortToString((ushort)12);
+      } else if (esc == 110) {     // n
+         result += "\n";
+      } else if (esc == 114) {     // r
+         result += "\r";
+      } else if (esc == 116) {     // t
+         result += "\t";
+      } else if (esc == 117 && i + 4 < StringLen(str)) { // u
+         int code = 0;
+         bool valid = true;
+         for (int j = 1; j <= 4; j++) {
+            int hv = JsonHexValue(StringGetCharacter(str, i + j));
+            if (hv < 0) {
+               valid = false;
+               break;
+            }
+            code = code * 16 + hv;
+         }
+         if (valid) {
+            result += ShortToString((ushort)code);
+            i += 4;
+         } else {
+            result += "\\u";
+         }
+      } else {
+         result += StringSubstr(str, i, 1);
+      }
+   }
+
+   return result;
+}
+
+// Find the closing quote for a JSON string, respecting backslash escapes
+int JsonStringEnd(string jsonStr, int startPos) {
+   bool escaped = false;
+   int len = StringLen(jsonStr);
+
+   for (int pos = startPos; pos < len; pos++) {
+      ushort ch = StringGetCharacter(jsonStr, pos);
+
+      if (escaped) {
+         escaped = false;
+         continue;
+      }
+      if (ch == 92) { // backslash
+         escaped = true;
+         continue;
+      }
+      if (ch == 34) { // "
+         return pos;
+      }
+   }
+
+   return -1;
+}
 
 // Parse simple JSON with no nesting (flat key-value pairs only)
 bool ParseSimpleJson(string jsonStr, JsonKeyValue &pairs[]) {
@@ -90,11 +213,11 @@ bool ParseSimpleJson(string jsonStr, JsonKeyValue &pairs[]) {
       if (StringGetCharacter(jsonStr, pos) == '"') {
          pos++; // skip opening quote
          keyStart = pos;
-         while (pos < len && StringGetCharacter(jsonStr, pos) != '"') pos++;
-         if (pos >= len) break;
+         int keyEnd = JsonStringEnd(jsonStr, pos);
+         if (keyEnd < 0) break;
          
-         string key = StringSubstr(jsonStr, keyStart, pos - keyStart);
-         pos++; // skip closing quote
+         string key = JsonUnescape(StringSubstr(jsonStr, keyStart, keyEnd - keyStart));
+         pos = keyEnd + 1; // skip closing quote
          
          // Skip whitespace and colon
          while (pos < len && (StringGetCharacter(jsonStr, pos) == ' ' || 
@@ -117,10 +240,10 @@ bool ParseSimpleJson(string jsonStr, JsonKeyValue &pairs[]) {
             // Quoted string value
             pos++; // skip opening quote
             int valueStart = pos;
-            while (pos < len && StringGetCharacter(jsonStr, pos) != '"') pos++;
-            if (pos >= len) break;
-            value = StringSubstr(jsonStr, valueStart, pos - valueStart);
-            pos++; // skip closing quote
+            int valueEnd = JsonStringEnd(jsonStr, pos);
+            if (valueEnd < 0) break;
+            value = JsonUnescape(StringSubstr(jsonStr, valueStart, valueEnd - valueStart));
+            pos = valueEnd + 1; // skip closing quote
          } else {
             // Unquoted value (number, boolean, null)
             int valueStart = pos;
@@ -201,10 +324,10 @@ string BuildSimpleJson(JsonKeyValue &pairs[]) {
       if (i > 0) json += ",";
       
       // Add key with quotes
-      json += "\"" + pairs[i].key + "\":";
+      json += "\"" + JsonEscape(pairs[i].key) + "\":";
       
       // Add value with quotes
-      json += "\"" + pairs[i].value + "\"";
+      json += "\"" + JsonEscape(pairs[i].value) + "\"";
    }
    
    json += "}";

@@ -116,14 +116,14 @@ The `mql/` folder contains two EA files — one for MT4 and one for MT5 — alon
 
 | Parameter | Default | Description |
 |---|---|---|
-| `ServerHost` | `localhost` | IP or hostname of the machine running the Python app |
+| `ServerHost` | `127.0.0.1` | IP or hostname of the machine running the Python app |
 | `ServerPort` | `9000` | Must match `server.port` in `config.yaml` |
 | `HeartbeatIntervalSec` | `30` | Seconds between keep-alive pings |
 | `AccountUpdateIntervalSec` | `15` | Seconds between balance/equity updates |
 | `TimerIntervalMs` | `100` | Poll interval in milliseconds (100 ms is reliable on Windows) |
 | `Slippage` | `3` | Slippage tolerance in points when executing copy trades |
 
-4. Enable **"Allow live trading"** on the Common tab. MT4 also needs **"Allow DLL imports"** for `Sockets.mqh`; MT5 uses native sockets instead. For MT5, add the EA's `ServerHost` value (for example `localhost` or `127.0.0.1`) to **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**.
+4. Enable **"Allow live trading"** on the Common tab. MT4 also needs **"Allow DLL imports"** for `Sockets.mqh`; MT5 uses native sockets instead. For MT5, add the EA's `ServerHost` value (for example `127.0.0.1`) to **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**.
 5. Click **OK**. A status label will appear in the top-right corner of the chart:
    - 🟢 `TradeCopier CONNECTED [account]` — EA is connected to the Python server.
    - 🔴 `TradeCopier DISCONNECTED` — connection is down; the EA retries automatically.
@@ -196,7 +196,7 @@ The file is created automatically at `<project-root>/config.yaml` on first run. 
 
 ```yaml
 server:
-  host: "localhost"            # IP to bind the TCP server on; use "0.0.0.0" to accept
+  host: "127.0.0.1"            # IP to bind the TCP server on; use "0.0.0.0" to accept
                                # connections from other machines on the network
   port: 9000                   # TCP port; must match ServerPort in each EA
   heartbeat_interval: 30       # seconds between heartbeat pings to each EA
@@ -280,7 +280,7 @@ uv run pytest
 
 - Confirm the Python app is running and the server has been started (green status in toolbar).
 - Check `ServerHost` and `ServerPort` in the EA inputs match `config.yaml`.
-- If the EA and the Python app are on different machines, set `host` to `0.0.0.0` in `config.yaml` and open the port in the Windows Firewall.
+- If the EA and the Python app are on different machines, set `host` to `0.0.0.0` in `config.yaml`, set `ServerHost` in the EA to the Python machine's LAN IP, and open the port in the Windows Firewall.
 - Look at the Event Log panel for connection errors.
 
 ### Terminal appears in the UI but trades are not being copied

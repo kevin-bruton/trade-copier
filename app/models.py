@@ -106,7 +106,7 @@ class CopyRule:
 class ServerConfig:
     """TCP server bind settings loaded from config.yaml."""
 
-    host: str = "localhost"
+    host: str = "127.0.0.1"
     port: int = 9000
     heartbeat_interval: int = 30
     account_update_interval: int = 15

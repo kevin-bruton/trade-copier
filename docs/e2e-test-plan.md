@@ -17,7 +17,7 @@ It complements the automated Python unit/integration test suite in `tests/`.
 | Source terminal | MetaTrader 4 **or** MetaTrader 5 with `TradeCopierEA` compiled and loaded on a chart |
 | Destination terminal | MetaTrader 4 **or** MetaTrader 5 with `TradeCopierEA` loaded |
 | `config.yaml` | `source_terminal_path` must match `TerminalPath()` reported by the source EA |
-| Network | All terminals reachable at the server's `host:port` (default `localhost:9000`) |
+| Network | All terminals reachable at the server's `host:port` (default `127.0.0.1:9000`) |
 
 ### Minimal setup (single machine)
 
@@ -26,7 +26,7 @@ It complements the automated Python unit/integration test suite in `tests/`.
 ```
 
 Both terminals and the Python process run on the same Windows machine.  
-The server's `host` can stay as `localhost`.
+The server's `host` can stay as `127.0.0.1`.
 
 ---
 
@@ -38,7 +38,7 @@ The server's `host` can stay as `localhost`.
 
 | Step | Action | Expected result |
 |------|--------|-----------------|
-| 1 | Start the Python server (click **▶ Start Server** in the UI) | Status shows green ● Running on localhost:9000 |
+| 1 | Start the Python server (click **▶ Start Server** in the UI) | Status shows green ● Running on 127.0.0.1:9000 |
 | 2 | Open MT4/MT5 chart and attach `TradeCopierEA` | EA shows "Connecting…" then "Connected" on chart label |
 | 3 | Check **Connected Instances** panel | One row appears with green dot, correct Directory / Broker / Account / Balance |
 | 4 | Check Event Log | `[INFO] Registered: <name>  MT4 \| <broker> \| <account> \| DEMO` |

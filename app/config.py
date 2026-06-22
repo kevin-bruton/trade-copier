@@ -20,7 +20,7 @@ from app.models import (
 
 _DEFAULT_YAML = """\
 server:
-  host: "localhost"
+  host: "127.0.0.1"
   port: 9000
   heartbeat_interval: 30
   account_update_interval: 15
@@ -163,7 +163,7 @@ class ConfigManager:
         # --- Server config ---
         srv = self._raw.get("server", {})
         self.server = ServerConfig(
-            host=srv.get("host", "localhost"),
+            host=srv.get("host", "127.0.0.1"),
             port=int(srv.get("port", 9000)),
             heartbeat_interval=int(srv.get("heartbeat_interval", 30)),
             account_update_interval=int(srv.get("account_update_interval", 15)),

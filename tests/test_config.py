@@ -46,7 +46,7 @@ class TestConfigDefaults:
 
     def test_default_host(self, tmp_path):
         cm = ConfigManager(tmp_path / "config.yaml")
-        assert cm.server.host == "localhost"
+        assert cm.server.host == "127.0.0.1"
 
     def test_default_port(self, tmp_path):
         cm = ConfigManager(tmp_path / "config.yaml")

@@ -90,7 +90,7 @@ class TestCopyRecordDefaults:
 
 class TestServerConfigDefaults:
     def test_default_host(self):
-        assert ServerConfig().host == "localhost"
+        assert ServerConfig().host == "127.0.0.1"
 
     def test_default_port(self):
         assert ServerConfig().port == 9000
