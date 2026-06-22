@@ -123,7 +123,7 @@ The `mql/` folder contains two EA files — one for MT4 and one for MT5 — alon
 | `TimerIntervalMs` | `100` | Poll interval in milliseconds (100 ms is reliable on Windows) |
 | `Slippage` | `3` | Slippage tolerance in points when executing copy trades |
 
-4. Enable **"Allow live trading"** on the Common tab. MT4 also needs **"Allow DLL imports"** for `Sockets.mqh`; MT5 uses native sockets instead. For MT5, add the EA's `ServerHost` value (for example `127.0.0.1`) to **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**.
+4. Enable **"Allow live trading"** on the Common tab. MT4 also needs **"Allow DLL imports"** for `Sockets.mqh`; MT5 uses native sockets instead. For MT5, add the EA's `ServerHost` as a URL, with protocol and no port, to **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**. For the default `ServerHost=127.0.0.1`, the exact entry must be `http://127.0.0.1`.
 5. Click **OK**. A status label will appear in the top-right corner of the chart:
    - 🟢 `TradeCopier CONNECTED [account]` — EA is connected to the Python server.
    - 🔴 `TradeCopier DISCONNECTED` — connection is down; the EA retries automatically.
@@ -280,6 +280,7 @@ uv run pytest
 
 - Confirm the Python app is running and the server has been started (green status in toolbar).
 - Check `ServerHost` and `ServerPort` in the EA inputs match `config.yaml`.
+- For MT5 `SocketConnect` error `4014`, check **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**. The entry must include the protocol and omit the port: use `http://127.0.0.1` for the default local setup, not `127.0.0.1` or `http://127.0.0.1:9000`.
 - If the EA and the Python app are on different machines, set `host` to `0.0.0.0` in `config.yaml`, set `ServerHost` in the EA to the Python machine's LAN IP, and open the port in the Windows Firewall.
 - Look at the Event Log panel for connection errors.
 

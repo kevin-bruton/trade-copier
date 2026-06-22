@@ -84,6 +84,20 @@ void ClientSocket::Init(string host, ushort port)
       mLastSocketError = GetLastError();
       Print("TradeCopierSocketMT5: SocketConnect failed to ", host, ":", port,
             ", error=", mLastSocketError);
+      if (mLastSocketError == 4014) {
+         long programType = MQLInfoInteger(MQL_PROGRAM_TYPE);
+         Print("TradeCopierSocketMT5: error 4014 means socket calls are not allowed "
+               "in this MT5 context. MQL_PROGRAM_TYPE=", programType,
+               " (PROGRAM_EXPERT=", PROGRAM_EXPERT, ", PROGRAM_SCRIPT=", PROGRAM_SCRIPT,
+               ", PROGRAM_INDICATOR=", PROGRAM_INDICATOR, ").");
+         Print("TradeCopierSocketMT5: if program type is Expert, check the MT5 allow-list: "
+               "Tools > Options > Expert Advisors > Allow WebRequest for listed URL. "
+               "Add the exact socket host ", host,
+               " (and if MT5 rejects bare hosts, also try http://", host, ").");
+      } else if (mLastSocketError == 5272) {
+         Print("TradeCopierSocketMT5: error 5272 means MT5 could not connect. "
+               "Confirm the Python server is started and listening on ", host, ":", port, ".");
+      }
       Close();
       return;
    }
