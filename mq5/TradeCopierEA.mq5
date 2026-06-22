@@ -9,7 +9,7 @@
 //| changes; OnTimer() handles the connection loop and heartbeats.    |
 //+------------------------------------------------------------------+
 #property strict
-#include <TradeCopierSocketMT5.mqh>
+#include <Sockets.mqh>
 #include <SimpleJson.mqh>
 
 //--- Input parameters
