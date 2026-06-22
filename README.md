@@ -94,9 +94,10 @@ The `mql/` folder contains two EA files — one for MT4 and one for MT5 — alon
 
 | File | Destination |
 |---|---|
-| `mql/TradeCopierEA.mq4` | `<MT4 terminal>\MQL4\Experts\` |
-| `mql/TradeCopierEA.mq5` | `<MT5 terminal>\MQL5\Experts\` |
-| `mql/Sockets.mqh` | `<terminal>\MQL4\Include\` _and_ `<terminal>\MQL5\Include\` |
+| `mq4/TradeCopierEA.mq4` | `<MT4 terminal>\MQL4\Experts\` |
+| `mq5/TradeCopierEA.mq5` | `<MT5 terminal>\MQL5\Experts\` |
+| `mq4/Sockets.mqh` | `<MT4 terminal>\MQL4\Include\` |
+| `mq5/Sockets.mqh` | `<MT5 terminal>\MQL5\Include\` |
 | `mql/SimpleJson.mqh` | `<terminal>\MQL4\Include\` _and_ `<terminal>\MQL5\Include\` |
 
 > Because the terminals are in portable mode the `MQL4\` / `MQL5\` folders are inside the terminal's own installation directory.
@@ -122,7 +123,7 @@ The `mql/` folder contains two EA files — one for MT4 and one for MT5 — alon
 | `TimerIntervalMs` | `100` | Poll interval in milliseconds (100 ms is reliable on Windows) |
 | `Slippage` | `3` | Slippage tolerance in points when executing copy trades |
 
-4. Enable **"Allow live trading"** and **"Allow DLL imports"** on the Common tab.
+4. Enable **"Allow live trading"** on the Common tab. MT4 also needs **"Allow DLL imports"** for `Sockets.mqh`; MT5 uses native sockets instead. For MT5, add the EA's `ServerHost` value (for example `localhost` or `127.0.0.1`) to **Tools -> Options -> Expert Advisors -> Allow WebRequest for listed URL**.
 5. Click **OK**. A status label will appear in the top-right corner of the chart:
    - 🟢 `TradeCopier CONNECTED [account]` — EA is connected to the Python server.
    - 🔴 `TradeCopier DISCONNECTED` — connection is down; the EA retries automatically.
@@ -324,11 +325,13 @@ flowchart TB
     Ui --> RulesPanelPy["rules_panel.py"]
     Ui --> LogPanelPy["log_panel.py"]
 
-    Root --> Mql["mql/"]
-    Mql --> Mq4["TradeCopierEA.mq4<br/>MT4 Expert Advisor"]
-    Mql --> Mq5["TradeCopierEA.mq5<br/>MT5 Expert Advisor"]
-    Mql --> Sockets["Sockets.mqh<br/>socket client header"]
-    Mql --> SimpleJson["SimpleJson.mqh<br/>JSON serialisation header"]
+    Root --> Mq4["mq4/"]
+    Mq4 --> Mq4["TradeCopierEA.mq4<br/>MT4 Expert Advisor"]
+    Mq4 --> Sockets["Sockets.mqh / Sockets.<br/>socket client headers"]
+    Mq4 --> SimpleJson["SimpleJson.mqh<br/>JSON serialisation header"]
+    Mq5 --> Mq5["TradeCopierEA.mq5<br/>MT5 Expert Advisor"]
+    Mq5 --> Sockets["Sockets.mqh / Sockets.<br/>socket client headers"]
+    Mq5 --> SimpleJson["SimpleJson.mqh<br/>JSON serialisation header"]
 
     Root --> Tests["tests/<br/>pytest test suite (121 tests)"]
 
