@@ -284,6 +284,12 @@ uv run pytest
 - If the EA and the Python app are on different machines, set `host` to `0.0.0.0` in `config.yaml`, set `ServerHost` in the EA to the Python machine's LAN IP, and open the port in the Windows Firewall.
 - Look at the Event Log panel for connection errors.
 
+### EA shows CONNECTED but no row appears
+
+- Check the Python app's Event Log. It should show `Socket connected: ...` as soon as the EA connects.
+- If the log shows `Malformed JSON`, re-copy and recompile the matching `SimpleJson.mqh` and `TradeCopierEA` files in MetaEditor. This usually means MetaTrader is still running stale MQL files.
+- If there is no `Socket connected` line, the EA connected to a different process, host, or port than the running Python app.
+
 ### Terminal appears in the UI but trades are not being copied
 
 - Confirm a copy rule exists with the correct `source_terminal_path` and at least one destination.

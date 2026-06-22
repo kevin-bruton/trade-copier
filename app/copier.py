@@ -80,6 +80,13 @@ class TradeCopier:
             self._on_disconnect(conn_id, msg.get("terminal_path", ""))
             return
 
+        if msg_type == "_SERVER_LOG":
+            level = str(msg.get("level", "INFO"))
+            message = str(msg.get("message", ""))
+            if message:
+                self._log(level, message)
+            return
+
         # All other message types require a registered (known) terminal_path
         terminal_path = self._conn_to_path.get(conn_id)
         if not terminal_path:

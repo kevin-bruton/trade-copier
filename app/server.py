@@ -174,6 +174,14 @@ class TradeCopierServer:
         conn_id = f"{addr[0]}:{addr[1]}"
         self._conn_sockets[conn_id] = conn
         self._buffers[conn_id] = ""
+        self._on_event(
+            {
+                "_conn_id": conn_id,
+                "type": "_SERVER_LOG",
+                "level": "INFO",
+                "message": f"Socket connected: {conn_id}",
+            }
+        )
 
     def _read_client(self, conn_id: str, sock: socket.socket) -> bool:
         """Read available data from *sock*.  Returns ``False`` when disconnected."""
@@ -196,9 +204,28 @@ class TradeCopierServer:
         """Parse a complete JSON line and forward it via the on_event callback."""
         try:
             msg = json.loads(line)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as exc:
+            self._on_event(
+                {
+                    "_conn_id": conn_id,
+                    "type": "_SERVER_LOG",
+                    "level": "WARN",
+                    "message": (
+                        f"Malformed JSON from {conn_id}: {exc.msg} "
+                        f"at char {exc.pos}; line starts {line[:120]!r}"
+                    ),
+                }
+            )
             return
         if not isinstance(msg, dict):
+            self._on_event(
+                {
+                    "_conn_id": conn_id,
+                    "type": "_SERVER_LOG",
+                    "level": "WARN",
+                    "message": f"Ignored non-object JSON from {conn_id}",
+                }
+            )
             return
         msg["_conn_id"] = conn_id
         self._on_event(msg)

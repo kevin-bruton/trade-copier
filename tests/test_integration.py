@@ -192,6 +192,14 @@ class TestServerNetworking:
     def test_client_can_connect(self, bare_server):
         srv, events, port = bare_server
         ea = _EA(port)
+        assert wait_for(
+            lambda: any(
+                e.get("type") == "_SERVER_LOG"
+                and e.get("level") == "INFO"
+                and "Socket connected" in e.get("message", "")
+                for e in events
+            )
+        )
         ea.close()
 
     def test_message_received_as_event(self, bare_server):
@@ -205,7 +213,7 @@ class TestServerNetworking:
         srv, events, port = bare_server
         ea = _EA(port)
         ea.send({"type": "HEARTBEAT"})
-        assert wait_for(lambda: len(events) > 0)
+        assert wait_for(lambda: any(e.get("type") == "HEARTBEAT" for e in events))
         event = next(e for e in events if e.get("type") == "HEARTBEAT")
         assert "_conn_id" in event
         assert "127.0.0.1:" in event["_conn_id"]
@@ -229,10 +237,18 @@ class TestServerNetworking:
         ea.close()
         assert wait_for(lambda: any(e.get("type") == "_DISCONNECT" for e in events))
 
-    def test_malformed_json_silently_ignored(self, bare_server):
+    def test_malformed_json_logs_warning_but_keeps_connection_alive(self, bare_server):
         srv, events, port = bare_server
         ea = _EA(port)
         ea._sock.sendall(b"not-valid-json\r\n")
+        assert wait_for(
+            lambda: any(
+                e.get("type") == "_SERVER_LOG"
+                and e.get("level") == "WARN"
+                and "Malformed JSON" in e.get("message", "")
+                for e in events
+            )
+        )
         # Connection remains alive — a subsequent valid message is delivered
         ea.send({"type": "HEARTBEAT"})
         assert wait_for(lambda: any(e.get("type") == "HEARTBEAT" for e in events))

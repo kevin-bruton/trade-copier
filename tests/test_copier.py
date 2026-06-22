@@ -141,6 +141,15 @@ class TestRegisterHandler:
         assert SRC not in copier.instances
         assert any(level == "WARN" for level, _ in logs)
 
+    def test_server_log_event_is_logged_without_registration(self, copier, logs):
+        copier.handle_message({
+            "_conn_id": "c1",
+            "type": "_SERVER_LOG",
+            "level": "WARN",
+            "message": "Malformed JSON from c1",
+        })
+        assert logs[-1] == ("WARN", "Malformed JSON from c1")
+
     def test_duplicate_register_logs_warn(self, copier, logs):
         copier.handle_message(reg_msg("c1", SRC))
         copier.handle_message(reg_msg("c2", SRC))  # same path, different conn

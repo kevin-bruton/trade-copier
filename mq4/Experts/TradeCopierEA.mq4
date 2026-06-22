@@ -91,7 +91,11 @@ void UpdateStatusLabel(bool connected) {
 //+------------------------------------------------------------------+
 bool SendMsg(string msg) {
    if (!glbSocket) return false;
-   return glbSocket.Send(msg + "\r\n");
+   bool ok = glbSocket.Send(msg + "\r\n");
+   if (!ok) {
+      Print("TradeCopierEA MT4: socket send failed, error=", glbSocket.GetLastSocketError());
+   }
+   return ok;
 }
 
 //+------------------------------------------------------------------+
@@ -181,8 +185,11 @@ void SendRegister() {
       "margin",        DoubleToString(AccountMargin(),     2),
       "free_margin",   DoubleToString(AccountFreeMargin(), 2)
    );
-   SendMsg(msg);
-   Print("TradeCopierEA MT4: REGISTER sent for ", TerminalPath());
+   if (SendMsg(msg)) {
+      Print("TradeCopierEA MT4: REGISTER sent for ", TerminalPath());
+   } else {
+      Print("TradeCopierEA MT4: REGISTER send failed for ", TerminalPath());
+   }
 }
 
 //+------------------------------------------------------------------+

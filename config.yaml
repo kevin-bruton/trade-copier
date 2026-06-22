@@ -1,26 +1,17 @@
 server:
-  host: "127.0.0.1"
+  host: 127.0.0.1
   port: 9000
   heartbeat_interval: 30
   account_update_interval: 15
-
-copy_rules: []
-# Example rule (uncomment and fill in):
-# copy_rules:
-#   - id: "rule_001"
-#     name: "IC Markets MT4 -> Pepperstone MT5"
-#     enabled: true
-#     # terminal_path as reported by the EA (TerminalPath() / TERMINAL_PATH)
-#     source_terminal_path: "C:\\Trading\\MetaTrader4_ICMarkets"
-#     destinations:
-#       - terminal_path: "C:\\Trading\\MetaTrader5_Pepperstone"
-#         size_mode: "proportional"   # fixed | proportional | account_percent | fixed_dollar
-#         size_value: 100             # 100 % of source size
-#         size_by_magic:              # optional per-magic overrides
-#           12345:
-#             size_mode: "fixed"
-#             size_value: 0.5
-#     magic_numbers: []              # empty = copy ALL magic numbers
-#     symbol_map:
-#       "EURUSD": "EURUSD"
-#       "XAUUSD": "GOLD"
+copy_rules:
+- id: 5108e661
+  name: RuleExtractors
+  enabled: true
+  source_terminal_path: C:\MetaTrader4
+  destinations:
+  - terminal_path: C:\MetaTrader5
+    size_mode: proportional
+    size_value: 100.0
+    size_by_magic: {}
+  magic_numbers: []
+  symbol_map: {}
